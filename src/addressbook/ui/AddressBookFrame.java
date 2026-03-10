@@ -26,6 +26,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 public class AddressBookFrame extends JFrame {
@@ -132,10 +133,10 @@ public class AddressBookFrame extends JFrame {
     }
 
     private JPanel buildTopBar() {
-        JPanel bar = new JPanel(new BorderLayout(8, 8));
+        JPanel bar = new JPanel();
+        bar.setLayout(new BoxLayout(bar, BoxLayout.Y_AXIS));
         bar.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
 
-        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         JButton addContactButton = new JButton("新建联系人");
         JButton editContactButton = new JButton("编辑联系人");
         JButton deleteContactButton = new JButton("删除联系人");
@@ -147,18 +148,6 @@ public class AddressBookFrame extends JFrame {
         JButton importVCardButton = new JButton("导入vCard");
         JButton exportVCardButton = new JButton("导出vCard");
         JButton columnButton = new JButton("列设置");
-
-        buttons.add(addContactButton);
-        buttons.add(editContactButton);
-        buttons.add(deleteContactButton);
-        buttons.add(addGroupButton);
-        buttons.add(deleteGroupButton);
-        buttons.add(adjustGroupButton);
-        buttons.add(importCsvButton);
-        buttons.add(exportCsvButton);
-        buttons.add(importVCardButton);
-        buttons.add(exportVCardButton);
-        buttons.add(columnButton);
 
         addContactButton.addActionListener(e -> onAddContact());
         editContactButton.addActionListener(e -> onEditContact());
@@ -172,19 +161,73 @@ public class AddressBookFrame extends JFrame {
         exportVCardButton.addActionListener(e -> onExportVCard());
         columnButton.addActionListener(e -> onConfigureColumns());
 
-        JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        List<JButton> actionButtons = List.of(
+                addContactButton,
+                editContactButton,
+                deleteContactButton,
+                addGroupButton,
+                deleteGroupButton,
+                adjustGroupButton,
+                importCsvButton,
+                exportCsvButton,
+                importVCardButton,
+                exportVCardButton,
+                columnButton
+        );
+        applyUniformButtonStyle(actionButtons);
+
+        JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        row1.setAlignmentX(Component.LEFT_ALIGNMENT);
+        row1.add(addContactButton);
+        row1.add(editContactButton);
+        row1.add(deleteContactButton);
+        row1.add(addGroupButton);
+        row1.add(deleteGroupButton);
+        row1.add(adjustGroupButton);
+
+        JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        row2.setAlignmentX(Component.LEFT_ALIGNMENT);
+        row2.add(importCsvButton);
+        row2.add(exportCsvButton);
+        row2.add(importVCardButton);
+        row2.add(exportVCardButton);
+        row2.add(columnButton);
+
+        JPanel row3 = new JPanel(new BorderLayout(8, 0));
+        row3.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JPanel searchRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
         JButton clearSearchButton = new JButton("清空");
-        searchPanel.add(new JLabel("搜索："));
-        searchPanel.add(searchField);
-        searchPanel.add(clearSearchButton);
-
+        searchField.setPreferredSize(new Dimension(260, searchField.getPreferredSize().height));
+        searchRight.add(new JLabel("搜索："));
+        searchRight.add(searchField);
+        searchRight.add(clearSearchButton);
         clearSearchButton.addActionListener(e -> searchField.setText(""));
+        row3.add(searchRight, BorderLayout.EAST);
 
-        bar.add(buttons, BorderLayout.CENTER);
-        bar.add(searchPanel, BorderLayout.EAST);
+        bar.add(row1);
+        bar.add(Box.createVerticalStrut(8));
+        bar.add(row2);
+        bar.add(Box.createVerticalStrut(8));
+        bar.add(row3);
+
         return bar;
     }
-
+    private void applyUniformButtonStyle(List<JButton> buttons) {
+        int maxWidth = 0;
+        int maxHeight = 0;
+        for (JButton button : buttons) {
+            button.setFocusPainted(false);
+            button.setMargin(new Insets(5, 12, 5, 12));
+            Dimension preferred = button.getPreferredSize();
+            maxWidth = Math.max(maxWidth, preferred.width);
+            maxHeight = Math.max(maxHeight, preferred.height);
+        }
+        Dimension uniform = new Dimension(maxWidth, maxHeight);
+        for (JButton button : buttons) {
+            button.setPreferredSize(uniform);
+            button.setMinimumSize(uniform);
+        }
+    }
     private GroupFilter filterFromSelection() {
         GroupListItem item = groupList.getSelectedValue();
         if (item == null) {
@@ -417,8 +460,16 @@ public class AddressBookFrame extends JFrame {
 
         try {
             List<Contact> exportContacts = contactsForExport();
-            csvExporter.exportTo(chooser.getSelectedFile().toPath(), exportContacts, queryService.groupIdNameMap());
-            JOptionPane.showMessageDialog(this, "CSV 导出完成，共 " + exportContacts.size() + " 条。", "完成", JOptionPane.INFORMATION_MESSAGE);
+            if (exportContacts.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "当前没有可导出的联系人。", "提示", JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+            Path output = normalizeExportPath(chooser, ".csv");
+            csvExporter.exportTo(output, exportContacts, queryService.groupIdNameMap());
+            JOptionPane.showMessageDialog(this,
+                    "CSV 导出完成，共 " + exportContacts.size() + " 条。\n文件：" + output.toAbsolutePath(),
+                    "完成",
+                    JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception ex) {
             showError("导出 CSV 失败", ex);
         }
@@ -454,13 +505,30 @@ public class AddressBookFrame extends JFrame {
 
         try {
             List<Contact> exportContacts = contactsForExport();
-            vCardExporter.exportTo(chooser.getSelectedFile().toPath(), exportContacts, queryService.groupIdNameMap());
-            JOptionPane.showMessageDialog(this, "vCard 导出完成，共 " + exportContacts.size() + " 条。", "完成", JOptionPane.INFORMATION_MESSAGE);
+            if (exportContacts.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "当前没有可导出的联系人。", "提示", JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+            Path output = normalizeExportPath(chooser, ".vcf");
+            vCardExporter.exportTo(output, exportContacts, queryService.groupIdNameMap());
+            JOptionPane.showMessageDialog(this,
+                    "vCard 导出完成，共 " + exportContacts.size() + " 条。\n文件：" + output.toAbsolutePath(),
+                    "完成",
+                    JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception ex) {
             showError("导出 vCard 失败", ex);
         }
     }
 
+    private Path normalizeExportPath(JFileChooser chooser, String extension) {
+        Path selected = chooser.getSelectedFile().toPath();
+        String fileName = selected.getFileName() == null ? "" : selected.getFileName().toString();
+        if (!fileName.toLowerCase(Locale.ROOT).endsWith(extension)) {
+            fileName = fileName + extension;
+            selected = selected.resolveSibling(fileName);
+        }
+        return selected;
+    }
     private void onConfigureColumns() {
         List<ContactColumn> current = tableModel.getVisibleColumns();
         Map<ContactColumn, JCheckBox> checks = new LinkedHashMap<>();
