@@ -25,8 +25,9 @@ public class ContactDialog extends JDialog {
 
     private ContactDraft result;
     private final Path dataDirectory;
-    private final String preservedPinyinOverride;
+    private String pinyinOverrideValue;
     private final JTextField photoField;
+    private final JLabel pinyinOverrideValueLabel = new JLabel();
     private final JLabel photoPreviewLabel = new JLabel("", SwingConstants.CENTER);
     private final JButton viewOriginalButton = new JButton("查看原图");
 
@@ -34,7 +35,7 @@ public class ContactDialog extends JDialog {
         super(owner, "联系人", ModalityType.APPLICATION_MODAL);
         ContactDraft draft = initial == null ? new ContactDraft() : initial;
         this.dataDirectory = dataDirectory == null ? Path.of("data") : dataDirectory;
-        this.preservedPinyinOverride = draft.getPinyinOverride() == null ? "" : draft.getPinyinOverride();
+        this.pinyinOverrideValue = draft.getPinyinOverride() == null ? "" : draft.getPinyinOverride();
 
         JPanel form = new JPanel(new GridBagLayout());
         form.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
@@ -61,6 +62,9 @@ public class ContactDialog extends JDialog {
 
         JButton browsePhotoButton = new JButton("选择相片");
         browsePhotoButton.addActionListener(e -> choosePhotoFile());
+        JButton editPinyinOverrideButton = new JButton("拼音Override");
+        editPinyinOverrideButton.addActionListener(e -> editPinyinOverride());
+        refreshPinyinOverrideLabel();
 
         photoField.getDocument().addDocumentListener(new DocumentListener() {
             @Override
@@ -99,6 +103,24 @@ public class ContactDialog extends JDialog {
         addRow(form, gbc, row++, "电子邮箱", emailField);
         addRow(form, gbc, row++, "个人主页", websiteField);
         addRow(form, gbc, row++, "生日(yyyy-MM-dd)", birthdayField);
+
+        gbc.gridx = 0;
+        gbc.gridy = row;
+        gbc.weightx = 0;
+        gbc.gridwidth = 1;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        form.add(new JLabel("拼音Override"), gbc);
+
+        gbc.gridx = 1;
+        gbc.weightx = 1;
+        gbc.gridwidth = 1;
+        form.add(pinyinOverrideValueLabel, gbc);
+
+        gbc.gridx = 2;
+        gbc.weightx = 0;
+        gbc.gridwidth = 1;
+        form.add(editPinyinOverrideButton, gbc);
+        row++;
 
         gbc.gridx = 0;
         gbc.gridy = row;
@@ -201,7 +223,7 @@ public class ContactDialog extends JDialog {
             created.setCompany(text(companyField));
             created.setHomeAddress(text(addressField));
             created.setPostalCode(text(postalField));
-            created.setPinyinOverride(preservedPinyinOverride);
+            created.setPinyinOverride(pinyinOverrideValue == null ? "" : pinyinOverrideValue);
             created.setNote(noteArea.getText() == null ? "" : noteArea.getText().trim());
 
             Set<String> selectedGroups = new HashSet<>();
@@ -392,6 +414,32 @@ public class ContactDialog extends JDialog {
         } catch (IOException ex) {
             JOptionPane.showMessageDialog(this, "打开原图失败：" + ex.getMessage(), "提示", JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+
+    private void editPinyinOverride() {
+        String input = (String) JOptionPane.showInputDialog(
+                this,
+                "请输入拼音override（可留空）：",
+                "拼音Override",
+                JOptionPane.PLAIN_MESSAGE,
+                null,
+                null,
+                pinyinOverrideValue
+        );
+        if (input == null) {
+            return;
+        }
+        pinyinOverrideValue = input.trim();
+        refreshPinyinOverrideLabel();
+    }
+
+    private void refreshPinyinOverrideLabel() {
+        if (pinyinOverrideValue == null || pinyinOverrideValue.isBlank()) {
+            pinyinOverrideValueLabel.setText("未设置");
+            return;
+        }
+        pinyinOverrideValueLabel.setText(pinyinOverrideValue);
     }
 
     private void addRow(JPanel panel, GridBagConstraints gbc, int row, String label, JComponent field) {
